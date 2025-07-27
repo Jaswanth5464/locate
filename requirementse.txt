@@ -4,4 +4,5 @@ python-engineio==4.8.1
 python-socketio==5.11.0
 simple-websocket==1.0.0
 gunicorn==22.0.0
-eventlet==0.36.1
+gevent==24.2.1  # CHANGE THIS LINE from eventlet to gevent
+gevent-websocket==0.10.1 # Add this line, often needed with gevent
