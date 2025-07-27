@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Tracker Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Socket.IO client library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+            padding: 1rem;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 32rem;
+            text-align: center;
+        }
+        .message-box {
+            background-color: #ecfdf5;
+            color: #047857;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-top: 1rem;
+            border: 1px solid #a7f3d0;
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .error-box {
+            background-color: #fef2f2;
+            color: #dc2626;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-top: 1rem;
+            border: 1px solid #fca5a5;
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6">Location Tracker Dashboard</h1>
+        <p class="text-gray-600 mb-4">
+            Waiting for location updates for session: <span class="font-semibold text-indigo-600">{{ session_name }}</span>
+            (ID: <span class="text-sm text-gray-500">{{ session_id }}</span>)
+        </p>
+
+        <div id="locationDisplay" class="p-4 bg-gray-100 rounded-lg text-left mb-6">
+            <p class="text-gray-700 font-medium mb-2">Latest Location:</p>
+            <div id="coords" class="text-lg font-bold text-gray-800">No location received yet.</div>
+            <div id="timestamp" class="text-sm text-gray-500 mt-1"></div>
+            <a id="mapLink" href="#" target="_blank" class="text-indigo-600 hover:underline mt-2 inline-block hidden">View on Map</a>
+        </div>
+
+        <div class="mt-8 p-4 bg-blue-50 rounded-lg text-blue-700 text-sm text-left">
+            <p class="font-semibold mb-2">How it works:</p>
+            <ul class="list-disc list-inside space-y-1">
+                <li>Keep this window open. When the person you shared the link with grants permission, their location will appear here.</li>
+                <li>Location updates are sent directly from their browser to this dashboard via WebSockets.</li>
+                <li>No data is stored persistently (it's in-memory for this demo). Closing the server or this window will clear the session.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Connect to the Socket.IO server
+        const socket = io(); // Connects to the server where the page was served from
+
+        /**
+         * Displays a custom message box instead of alert().
+         * @param {string} message - The message to display.
+         * @param {string} type - 'success' or 'error'.
+         */
+        function showMessageBox(message, type) {
+            let messageBox = document.getElementById('customMessageBox');
+            if (!messageBox) {
+                messageBox = document.createElement('div');
+                messageBox.id = 'customMessageBox';
+                document.body.appendChild(messageBox);
+            }
+
+            messageBox.className = `${type === 'error' ? 'error-box' : 'message-box'}`;
+            messageBox.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <span>${message}</span>
+                    <button onclick="document.getElementById('customMessageBox').remove()" class="text-lg font-bold ml-4">&times;</button>
+                </div>
+            `;
+            messageBox.style.display = 'block';
+
+            // Automatically hide after 5 seconds
+            setTimeout(() => {
+                if (messageBox) {
+                    messageBox.remove();
+                }
+            }, 5000);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const coordsDiv = document.getElementById('coords');
+            const timestampDiv = document.getElementById('timestamp');
+            const mapLink = document.getElementById('mapLink');
+
+            // Get session_id from the Jinja2 template context
+            const sessionId = "{{ session_id }}";
+
+            // Listen for 'location_update' events from the server
+            socket.on('location_update', (data) => {
+                // Ensure the update is for the current session
+                if (data.session_id === sessionId) {
+                    const { latitude, longitude, timestamp } = data;
+                    coordsDiv.innerHTML = `Latitude: ${latitude.toFixed(5)}, Longitude: ${longitude.toFixed(5)}`;
+                    timestampDiv.textContent = `Received at: ${new Date(timestamp).toLocaleString()}`;
+                    mapLink.href = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+                    mapLink.classList.remove('hidden');
+                    showMessageBox('Location received!', 'success');
+                }
+            });
+
+            // Optional: Handle initial connection status
+            socket.on('connect', () => {
+                console.log('Connected to Socket.IO server');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from Socket.IO server');
+            });
+        });
+    </script>
+</body>
+</html>

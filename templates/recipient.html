@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Request</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Socket.IO client library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+            padding: 1rem;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 32rem;
+            text-align: center;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+        .btn-secondary:hover {
+            background-color: #d1d5db;
+            transform: translateY(-2px);
+        }
+        .message-box {
+            background-color: #ecfdf5;
+            color: #047857;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-top: 1rem;
+            border: 1px solid #a7f3d0;
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .error-box {
+            background-color: #fef2f2;
+            color: #dc2626;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-top: 1rem;
+            border: 1px solid #fca5a5;
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6">Location Request</h1>
+        <p class="text-gray-600 mb-8">
+            "{{ session_name }}" is requesting your current location.
+            Your location will only be shared if you explicitly allow it.
+        </p>
+
+        <div id="locationStatus" class="mb-6 text-lg font-semibold text-gray-700"></div>
+
+        <button id="allowLocationBtn" class="btn btn-primary w-full mb-4">Allow Location Access</button>
+        <button id="denyLocationBtn" class="btn btn-secondary w-full">Deny</button>
+
+        <div class="mt-8 p-4 bg-orange-50 rounded-lg text-orange-700 text-sm text-left">
+            <p class="font-semibold mb-2">Privacy Information:</p>
+            <ul class="list-disc list-inside space-y-1">
+                <li>Your browser will ask for permission. You must grant it there too.</li>
+                <li>Your location is sent directly to the requester's open "tracker" dashboard.</li>
+                <li>This application does NOT store your location data persistently.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Connect to the Socket.IO server
+        const socket = io(); // Connects to the server where the page was served from
+
+        /**
+         * Displays a custom message box instead of alert().
+         * @param {string} message - The message to display.
+         * @param {string} type - 'success' or 'error'.
+         */
+        function showMessageBox(message, type) {
+            let messageBox = document.getElementById('customMessageBox');
+            if (!messageBox) {
+                messageBox = document.createElement('div');
+                messageBox.id = 'customMessageBox';
+                document.body.appendChild(messageBox);
+            }
+
+            messageBox.className = `${type === 'error' ? 'error-box' : 'message-box'}`;
+            messageBox.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <span>${message}</span>
+                    <button onclick="document.getElementById('customMessageBox').remove()" class="text-lg font-bold ml-4">&times;</button>
+                </div>
+            `;
+            messageBox.style.display = 'block';
+
+            // Automatically hide after 5 seconds
+            setTimeout(() => {
+                if (messageBox) {
+                    messageBox.remove();
+                }
+            }, 5000);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const locationStatusDiv = document.getElementById('locationStatus');
+            const allowLocationBtn = document.getElementById('allowLocationBtn');
+            const denyLocationBtn = document.getElementById('denyLocationBtn');
+
+            // Get session_id from the Jinja2 template context
+            const sessionId = "{{ session_id }}";
+
+            allowLocationBtn.addEventListener('click', () => {
+                locationStatusDiv.textContent = 'Requesting location...';
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            const { latitude, longitude } = position.coords;
+                            locationStatusDiv.innerHTML = `
+                                <p class="text-green-600">Location shared successfully!</p>
+                                <p class="text-sm text-gray-500">Latitude: ${latitude.toFixed(5)}, Longitude: ${longitude.toFixed(5)}</p>
+                            `;
+                            
+                            // Emit location data to the Flask backend via Socket.IO
+                            socket.emit('report_location', {
+                                session_id: sessionId,
+                                latitude: latitude,
+                                longitude: longitude,
+                                timestamp: new Date().toISOString()
+                            });
+                            showMessageBox('Location sent to tracker!', 'success');
+
+                            allowLocationBtn.disabled = true;
+                            denyLocationBtn.disabled = true;
+                        },
+                        (error) => {
+                            let errorMessage = 'Failed to get location.';
+                            switch (error.code) {
+                                case error.PERMISSION_DENIED:
+                                    errorMessage = 'Location access denied by the user.';
+                                    break;
+                                case error.POSITION_UNAVAILABLE:
+                                    errorMessage = 'Location information is unavailable.';
+                                    break;
+                                case error.TIMEOUT:
+                                    errorMessage = 'The request to get user location timed out.';
+                                    break;
+                                case error.UNKNOWN_ERROR:
+                                    errorMessage = 'An unknown error occurred.';
+                                    break;
+                            }
+                            locationStatusDiv.innerHTML = `<p class="text-red-600">${errorMessage}</p>`;
+                            showMessageBox(errorMessage, 'error');
+                            allowLocationBtn.disabled = true;
+                            denyLocationBtn.disabled = true;
+                        },
+                        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                    );
+                } else {
+                    locationStatusDiv.innerHTML = `<p class="text-red-600">Geolocation is not supported by this browser.</p>`;
+                    showMessageBox('Geolocation not supported by your browser.', 'error');
+                    allowLocationBtn.disabled = true;
+                    denyLocationBtn.disabled = true;
+                }
+            });
+
+            denyLocationBtn.addEventListener('click', () => {
+                locationStatusDiv.innerHTML = `<p class="text-red-600">Location access denied.</p>`;
+                showMessageBox('You have denied location access.', 'error');
+                allowLocationBtn.disabled = true;
+                denyLocationBtn.disabled = true;
+            });
+        });
+    </script>
+</body>
+</html>

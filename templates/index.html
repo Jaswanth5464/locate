@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Tracker App</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+            padding: 1rem;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 32rem;
+            text-align: center;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+        .btn-secondary:hover {
+            background-color: #d1d5db;
+            transform: translateY(-2px);
+        }
+        .input-field {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.75rem;
+            font-size: 1rem;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+        .link-display {
+            background-color: #f3f4f6;
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #374151;
+            margin-top: 1rem;
+            text-align: left;
+            border: 1px solid #e5e7eb;
+        }
+        .message-box {
+            background-color: #ecfdf5;
+            color: #047857;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-top: 1rem;
+            border: 1px solid #a7f3d0;
+            position: fixed; /* Ensures it stays visible */
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000; /* High z-index to be on top */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .error-box {
+            background-color: #fef2f2;
+            color: #dc2626;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-top: 1rem;
+            border: 1px solid #fca5a5;
+            position: fixed; /* Ensures it stays visible */
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000; /* High z-index to be on top */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6">Create Location Link</h1>
+        <p class="text-gray-600 mb-8">Generate a unique link to request someone's location with their explicit permission.</p>
+
+        <div class="mb-6 text-left">
+            <label for="sessionName" class="block text-gray-700 text-sm font-medium mb-2">Session Name (Optional)</label>
+            <input type="text" id="sessionName" placeholder="e.g., Meeting with John" class="input-field">
+        </div>
+
+        <button id="generateLinkBtn" class="btn btn-primary w-full mb-6">Generate Tracking Link</button>
+
+        <div id="linkOutput" class="hidden">
+            <p class="text-gray-700 font-medium mb-2 text-left">Share this link with the person:</p>
+            <div class="link-display" id="shareableLink"></div>
+            <button id="copyLinkBtn" class="btn btn-secondary w-full mt-4">Copy Link</button>
+            <p class="text-gray-700 font-medium mt-6 mb-2 text-left">Your tracking dashboard (keep this open):</p>
+            <div class="link-display" id="trackerLink"></div>
+            <button id="openTrackerBtn" class="btn btn-primary w-full mt-4">Open Tracker Dashboard</button>
+        </div>
+
+        <div class="mt-8 p-4 bg-blue-50 rounded-lg text-blue-700 text-sm text-left">
+            <p class="font-semibold mb-2">Important Privacy Notice:</p>
+            <ul class="list-disc list-inside space-y-1">
+                <li>Location access requires the recipient's explicit permission through their browser.</li>
+                <li>This is a client-side demo. Location data is NOT stored persistently on any server (it's in-memory for this demo).</li>
+                <li>The "tracker" dashboard must remain open in your browser to receive location updates.</li>
+                <li>Location accuracy varies based on device and environment.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Displays a custom message box instead of alert().
+         * @param {string} message - The message to display.
+         * @param {string} type - 'success' or 'error'.
+         */
+        function showMessageBox(message, type) {
+            let messageBox = document.getElementById('customMessageBox');
+            if (!messageBox) {
+                messageBox = document.createElement('div');
+                messageBox.id = 'customMessageBox';
+                document.body.appendChild(messageBox);
+            }
+
+            messageBox.className = `${type === 'error' ? 'error-box' : 'message-box'}`;
+            messageBox.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <span>${message}</span>
+                    <button onclick="document.getElementById('customMessageBox').remove()" class="text-lg font-bold ml-4">&times;</button>
+                </div>
+            `;
+            messageBox.style.display = 'block';
+
+            // Automatically hide after 5 seconds
+            setTimeout(() => {
+                if (messageBox) {
+                    messageBox.remove();
+                }
+            }, 5000);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const generateLinkBtn = document.getElementById('generateLinkBtn');
+            const copyLinkBtn = document.getElementById('copyLinkBtn');
+            const openTrackerBtn = document.getElementById('openTrackerBtn');
+            const shareableLinkDiv = document.getElementById('shareableLink');
+            const trackerLinkDiv = document.getElementById('trackerLink');
+            const linkOutputDiv = document.getElementById('linkOutput');
+            const sessionNameInput = document.getElementById('sessionName');
+
+            generateLinkBtn.addEventListener('click', async () => {
+                const sessionName = sessionNameInput.value.trim();
+
+                try {
+                    const response = await fetch('/generate_link', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ session_name: sessionName })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    shareableLinkDiv.textContent = data.recipient_url;
+                    trackerLinkDiv.textContent = data.tracker_url;
+
+                    linkOutputDiv.classList.remove('hidden');
+                    generateLinkBtn.classList.add('hidden');
+                    sessionNameInput.disabled = true;
+                    showMessageBox('Links generated successfully!', 'success');
+
+                } catch (error) {
+                    console.error('Error generating link:', error);
+                    showMessageBox('Failed to generate link. Please try again.', 'error');
+                }
+            });
+
+            copyLinkBtn.addEventListener('click', () => {
+                const linkToCopy = shareableLinkDiv.textContent;
+                const textarea = document.createElement('textarea');
+                textarea.value = linkToCopy;
+                textarea.style.position = 'absolute';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showMessageBox('Link copied to clipboard!', 'success');
+                } catch (err) {
+                    showMessageBox('Failed to copy link. Please copy manually.', 'error');
+                    console.error('Failed to copy text: ', err);
+                } finally {
+                    document.body.removeChild(textarea);
+                }
+            });
+
+            openTrackerBtn.addEventListener('click', () => {
+                const trackerUrl = trackerLinkDiv.textContent;
+                window.open(trackerUrl, '_blank');
+            });
+        });
+    </script>
+</body>
+</html>
